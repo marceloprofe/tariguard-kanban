@@ -19,9 +19,31 @@ service cloud.firestore {
    allow get: if signed() && (request.auth.uid == uid || admin());
    allow list: if admin();
    allow create,update: if admin() && uid != request.auth.uid
-    && request.resource.data.keys().hasOnly(['role'])
-    && request.resource.data.role in ['editor','viewer'];
+    && request.resource.data.keys().hasOnly(['role','displayName','email'])
+    && request.resource.data.role in ['editor','viewer']
+    && (!('displayName' in request.resource.data) || (request.resource.data.displayName is string && request.resource.data.displayName.size() <= 200))
+    && (!('email' in request.resource.data) || (request.resource.data.email is string && request.resource.data.email.size() <= 320));
    allow delete: if admin() && uid != request.auth.uid;
+  }
+  match /tariguardAccessRequests/{uid} {
+   allow get: if signed() && (request.auth.uid == uid || admin());
+   allow list: if admin();
+   allow create: if signed() && request.auth.uid == uid && !member()
+    && request.auth.token.email_verified == true
+    && request.resource.data.keys().hasAll(['displayName','email','status','requestedAt'])
+    && request.resource.data.keys().hasOnly(['displayName','email','status','requestedAt'])
+    && request.resource.data.displayName is string
+    && request.resource.data.displayName.size() > 0
+    && request.resource.data.displayName.size() <= 200
+    && request.resource.data.email == request.auth.token.email
+    && request.resource.data.email is string && request.resource.data.email.size() <= 320
+    && request.resource.data.status == 'pending'
+    && request.resource.data.requestedAt == request.time;
+   allow update: if admin() && resource.data.status == 'pending'
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','reviewedAt'])
+    && request.resource.data.status in ['approved','rejected']
+    && request.resource.data.reviewedAt == request.time;
+   allow delete: if false;
   }
  }
 }
