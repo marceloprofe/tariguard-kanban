@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function signed(){return request.auth != null;}
+  function member(){return signed() && exists(/databases/$(database)/documents/tariguardMembers/$(request.auth.uid));}
+  function role(){return get(/databases/$(database)/documents/tariguardMembers/$(request.auth.uid)).data.role;}
+  function admin(){return member() && role() == 'admin';}
+  match /tariguardBoards/power-group {
+   allow get: if member();
+   allow list,create,delete: if false;
+   allow update: if member() && role() in ['admin','editor']
+    && request.resource.data.keys().hasOnly(['payload','revision'])
+    && request.resource.data.payload is string
+    && request.resource.data.payload.size() < 800000
+    && request.resource.data.revision is int
+    && request.resource.data.revision == resource.data.revision + 1;
+  }
+  match /tariguardMembers/{uid} {
+   allow get: if signed() && (request.auth.uid == uid || admin());
+   allow list: if admin();
+   allow create,update: if admin() && uid != request.auth.uid
+    && request.resource.data.keys().hasOnly(['role'])
+    && request.resource.data.role in ['editor','viewer'];
+   allow delete: if admin() && uid != request.auth.uid;
+  }
+ }
+}
